@@ -1,0 +1,206 @@
+package com.example.home.gohoy.k8s_backend.utils;
+
+import io.fabric8.kubernetes.client.KubernetesClientException;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
+import org.springframework.stereotype.Component;
+
+import javax.net.ssl.*;
+import java.io.*;
+import java.security.*;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.RSAPrivateCrtKeySpec;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.stream.Collectors;
+
+@Component
+public class K8sJavaCurl {
+
+    private String clientKeyResource = "-----BEGIN RSA PRIVATE KEY-----\n" +
+            "MIIEpAIBAAKCAQEAzp2fxGd9KpGXwS2sFiP0fFggiRxMBBMjpG7/6LVMIwdSnddp\n" +
+            "Q9LgbifMaegiu+txyZgozrIoThsnJ2Ar6IooONdRqwndWK70Huqsf8wwpiHM1tm+\n" +
+            "ixSg5EgtZ7WeoIRTnQcsB4t08BY3zW1rX/XsjvCL49Y0p7VHbvn40ZPUTB7YhVn+\n" +
+            "Md3g7LKK4oNxgcNblj5MJrd54OneRGND8flAJBH0564lFvItOkdm4uIt81u4dN54\n" +
+            "LCnfvfNnxsYKHxz4Pwm7bEq+8iIlGKhfPlVp4iyEwrpqzZkVEzITkc9/H4MJjo3F\n" +
+            "9OPE/8b0DOcS1RrrrdtROMhTLf0wABaUvU2rIQIDAQABAoIBADsNa/trhKelAxWQ\n" +
+            "Yy3Uyuy7F1l4v/UuLzKxEu1E2+TrE97PEWP0Inb5YwAl+79v9I6ksY0Z+FESi6dC\n" +
+            "YmpNCl/skofrAtt07YrkkbbY+lKROIVzqHUByVZVlryceSDxkSBBS4FAh4STJRHO\n" +
+            "ozDDDgBwmdrdfyEru6XpRgdIVBYI+1I+EOlETqdvzoc5VWJtRahhq+TGetUzpbhC\n" +
+            "gJuIXovAiqckBLogdWnCETcEdFaLW6QGmyWxIUxaCZwmiHYmdUiV24WtsmWhlj4k\n" +
+            "AKk07kUoRgwUyIZUk8Xz79/QKTsHWbG4J9Hyu74FgUc4mforzubm15ZDLRkAYovZ\n" +
+            "5la0ERECgYEA3SIOfcJwPVV0LbIgsuEN1xcVRLo32gXPHImIE71lobZnvCp6gspu\n" +
+            "CgzfO5B59lJa6isN6RSrIHVYqLjfpqkHoMVpucyMc2XXXP8HhG2/pIZcL8u/L41G\n" +
+            "K5JPsGCmR+Qvky8lBpIvbSX2jqFtKAcgOvEoLzfb7F268Ie8RxOEkdUCgYEA7zGV\n" +
+            "A++0maGD2TRg4KmOcSKTA6VEU/BkNIyW+io0HIwnvEpAYyQPCxREMpP5HKZg5bHq\n" +
+            "C77/Dgp/B5/dDyOaX0PJvpRCiakvTHTy+ErC9je2Gg3qzxLvC2sMUhyJZ5/olrxS\n" +
+            "G3y/HfzB9aPCZD2aIXfOlWFqv/LNhc/YDXJRjh0CgYEAwgZizqdvUfGLyZh0pl9f\n" +
+            "hG1FhRMbdFoKepCV7DQPW4+vf2OKMP4rBPh8WkgPKzjhenuibfNrn0Q3MXtdCV9g\n" +
+            "SQlOFe9LAOnHyFogn2qob1RQyMMuEiwT+KEc+LYk0AmAUNVZ2GUl5dAcgNNU8n0m\n" +
+            "I3F7f8q0VbV8FBYU9gxDEq0CgYAdod/bH/wYuEi0ROfnjTnnTCg4YGYJnBNd6zjc\n" +
+            "/xN7oeVeTziQz6vJbJZSScCnyvjgG91p3RyN6cD4+dYSBRAf0y8QHB/uG/aPG0Hq\n" +
+            "fqCOjjJSIf0/8BGLMZTSK1TecJII8oWdgCPRHDoPK11uu673jHccTHhEFVlexXP3\n" +
+            "nnz6BQKBgQDbGNBk8PxhxOS21LYcKVB1yC0mwLqUva3J4bvq4kkB16E84BemKZ9c\n" +
+            "VdzLb8X7yjMuZ9b0BOPUH7kb2YgLd8YwPCPewh+OextJozaZIiACZH/B4AgpD4UR\n" +
+            "xoV217UYKsrppPhQJd3DMlqgsEmOLK8CT3PolEPD8QvU38DTtyJVrg==\n" +
+            "-----END RSA PRIVATE KEY-----\n";
+    private  String clientCertResource = "-----BEGIN CERTIFICATE-----\n" +
+            "MIIDITCCAgmgAwIBAgIId8Amfq8Rp28wDQYJKoZIhvcNAQELBQAwFTETMBEGA1UE\n" +
+            "AxMKa3ViZXJuZXRlczAeFw0yMzA4MDIwMzM4MDFaFw0yNDA4MDEwMzM4MDJaMDQx\n" +
+            "FzAVBgNVBAoTDnN5c3RlbTptYXN0ZXJzMRkwFwYDVQQDExBrdWJlcm5ldGVzLWFk\n" +
+            "bWluMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzp2fxGd9KpGXwS2s\n" +
+            "FiP0fFggiRxMBBMjpG7/6LVMIwdSnddpQ9LgbifMaegiu+txyZgozrIoThsnJ2Ar\n" +
+            "6IooONdRqwndWK70Huqsf8wwpiHM1tm+ixSg5EgtZ7WeoIRTnQcsB4t08BY3zW1r\n" +
+            "X/XsjvCL49Y0p7VHbvn40ZPUTB7YhVn+Md3g7LKK4oNxgcNblj5MJrd54OneRGND\n" +
+            "8flAJBH0564lFvItOkdm4uIt81u4dN54LCnfvfNnxsYKHxz4Pwm7bEq+8iIlGKhf\n" +
+            "PlVp4iyEwrpqzZkVEzITkc9/H4MJjo3F9OPE/8b0DOcS1RrrrdtROMhTLf0wABaU\n" +
+            "vU2rIQIDAQABo1YwVDAOBgNVHQ8BAf8EBAMCBaAwEwYDVR0lBAwwCgYIKwYBBQUH\n" +
+            "AwIwDAYDVR0TAQH/BAIwADAfBgNVHSMEGDAWgBTMs6II1sNRfMCTOUa/4zCOA/PD\n" +
+            "mzANBgkqhkiG9w0BAQsFAAOCAQEAjVKXU+4/WzeA0fTmbyGwHTCgZxkLp9lS4qQQ\n" +
+            "9rB8+l6eukeiB9rwrO5xCR6gaUF9x1W21Ah+FUWtrD+ZQiQeiFKHoGkAErZAC63A\n" +
+            "L+XEFzMDhopGdsr+Hbu2+af1fruvuoWoEY//vfMsAu0ifldQWJuYVrI0ZQVC5E2F\n" +
+            "XEp923PDXjbB9CkqjuUl5SmXyQbEnV4VKTuR1y/PDwoaknIQqmlfy+qglbWx8veF\n" +
+            "VNOB2fN6L8V2w3xsnym6pTtAMmgOv6kYGBt3tqbltqM7CquvzSuJme6Mnj2Rr3xh\n" +
+            "tm2Ov/1vgbBqEOB3Pts3OJ+UrhPFATB2rAWf+6vAj7GLWoG78Q==\n" +
+            "-----END CERTIFICATE-----\n";
+    private String caCertResource ="-----BEGIN CERTIFICATE-----\n" +
+            "MIIC/jCCAeagAwIBAgIBADANBgkqhkiG9w0BAQsFADAVMRMwEQYDVQQDEwprdWJl\n" +
+            "cm5ldGVzMB4XDTIzMDgwMjAzMzgwMVoXDTMzMDczMDAzMzgwMVowFTETMBEGA1UE\n" +
+            "AxMKa3ViZXJuZXRlczCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBANjJ\n" +
+            "IPStdgmMR8334jokKc/Mttrsc5/2uRYnFru5sLThysP0HxlzyZOlwR1TXVjyebWo\n" +
+            "w/hYyebfBRRJv6dCbkRqZHTghb3RXE5I/Ov3Y0sMFJ7Cljc81g65HB1wcjUvXWvV\n" +
+            "7f12fJDLJKCi1rNNhoM42KFpuLUKM2AMlLw9V1/R5wY4RRqLYoUcxEFdfZAEIbXl\n" +
+            "2kra3UBcIfbqP73Uo/cSE89bIhWbdd1MUyUvVFLsveYefmGccs14+ieYTfi72mtm\n" +
+            "KfI4rUAuWya4Tyl82n0WYKTGbosIEcNyyYKYaC8JItmw2Z6pqT0vMWTSI5oSieqL\n" +
+            "RhjAGCIg3bYfpH6PbmMCAwEAAaNZMFcwDgYDVR0PAQH/BAQDAgKkMA8GA1UdEwEB\n" +
+            "/wQFMAMBAf8wHQYDVR0OBBYEFMyzogjWw1F8wJM5Rr/jMI4D88ObMBUGA1UdEQQO\n" +
+            "MAyCCmt1YmVybmV0ZXMwDQYJKoZIhvcNAQELBQADggEBABFLUxEb+gJSPGIOcePR\n" +
+            "qefJfF5gv9xiN2s/hG2gJqMvViCgfLfOK/0DKPU2ah6td4KFptXDpGcPZuN5eb1w\n" +
+            "eG4YpV+MpihrtOc1ZMvmnIz7job/BybMqb+M9cwmNph6okR0g8Jo0yYsFMB4XhIS\n" +
+            "/vmVyLCKJRvvL9nvORaI0QgI80OSUGujzE0tFl6Vz4fx/dxImKtM/CcSoiG+DPtZ\n" +
+            "gJcyKzryUq4Mh9OdHcZd/R4NAlThAId57vU5rx0P/jleUP1ADT9xLaUWefu91cwx\n" +
+            "Ey1T6o535LUsGpoOrF/5waKGBC0ffQgIlfI6FiRTeTVDnnMfYiup5rEU2Vq1dD3j\n" +
+            "JtY=\n" +
+            "-----END CERTIFICATE-----\n";
+    
+
+    public SSLContext preLoad() throws Exception {
+        System.out.println(caCertResource);
+        System.out.println(clientCertResource);
+        System.out.println(clientKeyResource);
+        InputStream caCert = createInputStreamFromBase64EncodedString(caCertResource);
+        InputStream clientCert = createInputStreamFromBase64EncodedString(clientCertResource);
+        InputStream clientKey = createInputStreamFromBase64EncodedString(clientKeyResource);
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        KeyStore trustStore = KeyStore.getInstance("pkcs12");
+        char[] trustStorePassphrase = "changeit".toCharArray();
+        trustStore.load(null);
+        while (caCert.available() > 0) {
+            CertificateFactory certFactory = CertificateFactory.getInstance("X509");
+            X509Certificate cert = (X509Certificate) certFactory.generateCertificate(caCert);
+            String alias = cert.getSubjectX500Principal().getName() + "_" + cert.getSerialNumber().toString(16);
+            trustStore.setCertificateEntry(alias, cert);
+        }
+        tmf.init(trustStore);
+        TrustManager[] trustManagers = tmf.getTrustManagers();
+      // clientKey clientCrt
+        CertificateFactory certFactory = CertificateFactory.getInstance("X509");
+        Collection<? extends Certificate> certificates = certFactory.generateCertificates(clientCert);
+        PrivateKey privateKey ;
+        byte[] keyBytes = decodePem(clientKey);
+        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+        try {
+            // First let's try PKCS8
+            privateKey = keyFactory.generatePrivate(new PKCS8EncodedKeySpec(keyBytes));
+        } catch (InvalidKeySpecException e) {
+            // Otherwise try PKCS8
+            RSAPrivateCrtKeySpec keySpec = PKCS1Util.decodePKCS1(keyBytes);
+            privateKey= keyFactory.generatePrivate(keySpec);
+        }
+        KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        keyStore.load(null);
+        String alias = certificates.stream().map(cert->((X509Certificate)cert).getIssuerX500Principal().getName()).collect(Collectors.joining("_"));
+        keyStore.setKeyEntry(alias, privateKey, trustStorePassphrase, certificates.toArray(new Certificate[0]));
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(keyStore, trustStorePassphrase);
+        KeyManager[] keyManagers = kmf.getKeyManagers();
+
+        //sslContext
+        SSLContext sslContext ;
+        try {
+             sslContext = SSLContext.getInstance("TLSv1.2");
+            sslContext.init(keyManagers, trustManagers, new SecureRandom());
+        } catch (KeyManagementException | NoSuchAlgorithmException e) {
+            throw KubernetesClientException.launderThrowable(e);
+        }
+        return sslContext;
+    }
+
+    public String sendCurlRequest(String path) throws Exception {
+
+        SSLContext sslContext =  preLoad();
+
+        CloseableHttpClient httpClient = HttpClients.custom()
+                .setSSLContext(sslContext)
+                .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
+                .build();
+
+        HttpUriRequest request = new HttpGet("https://192.168.111.140:6443/"+path);
+        HttpResponse response = httpClient.execute(request);
+
+        HttpEntity entity = response.getEntity();
+        if (entity != null) {
+            String result = EntityUtils.toString(entity);
+            System.out.println(result);
+            return result;
+        } else {
+            return null;
+        }
+    }
+
+
+    private static ByteArrayInputStream createInputStreamFromBase64EncodedString(String data) {
+        byte[] bytes;
+        try {
+            bytes = Base64.getDecoder().decode(data);
+        } catch (IllegalArgumentException illegalArgumentException) {
+            bytes = data.getBytes();
+        }
+
+        return new ByteArrayInputStream(bytes);
+    }
+
+    private static byte[] decodePem(InputStream keyInputStream) throws IOException {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(keyInputStream))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.contains("-----BEGIN ")) {
+                    return readBytes(reader, line.trim().replace("BEGIN", "END"));
+                }
+            }
+            throw new IOException("PEM is invalid: no begin marker");
+        }
+    }
+    private static byte[] readBytes(BufferedReader reader, String endMarker) throws IOException {
+        String line;
+        StringBuilder buf = new StringBuilder();
+
+        while ((line = reader.readLine()) != null) {
+            if (line.contains(endMarker)) {
+                return Base64.getDecoder().decode(buf.toString());
+            }
+            buf.append(line.trim());
+        }
+        throw new IOException("PEM is invalid : No end marker");
+    }
+}
