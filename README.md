@@ -1,0 +1,2 @@
+# kubernetes-java-restApi
+使用java来模拟curl向集群发送api请求，主要是kubevirt没有现成的java包，需要使用restApi进行操作。
